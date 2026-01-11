@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useCallback, useEffect, useLayoutEffect } from 'react';
 import { STYLE_RULES, StyleRule } from '../constants';
 import { PastedRange } from '../types';
 import { Eraser } from 'lucide-react';
@@ -8,11 +8,13 @@ interface EditorProps {
   onChange: (content: string) => void;
   onTyping: () => void;
   focusMode: boolean;
+  typewriterMode: boolean;
   styleCheck: boolean;
   isSplitMode?: boolean;
   pastedRanges?: PastedRange[];
   onPastedRangesChange?: (ranges: PastedRange[]) => void;
   highlightPastedText: boolean;
+  onCursorOffsetChange?: (offset: number) => void;
 }
 
 // Check if position is in a pasted range
@@ -84,20 +86,114 @@ function renderStyleCheckedText(text: string, keyPrefix: string): React.ReactNod
   return parts;
 }
 
+function getLineHeightPx(el: HTMLElement): number {
+  const computed = window.getComputedStyle(el);
+  const lineHeightRaw = computed.lineHeight;
+
+  if (lineHeightRaw.endsWith('px')) {
+    const px = Number.parseFloat(lineHeightRaw);
+    return Number.isFinite(px) ? px : 20;
+  }
+
+  const fontSizePx = Number.parseFloat(computed.fontSize);
+  const unitless = Number.parseFloat(lineHeightRaw);
+  if (Number.isFinite(fontSizePx) && Number.isFinite(unitless)) {
+    return unitless * fontSizePx;
+  }
+
+  return Number.isFinite(fontSizePx) ? fontSizePx * 1.75 : 20;
+}
+
+type CaretMeasurer = {
+  mirror: HTMLDivElement;
+  textNode: Text;
+  marker: HTMLSpanElement;
+};
+
+function createCaretMeasurer(): CaretMeasurer {
+  const mirror = document.createElement('div');
+  mirror.style.position = 'absolute';
+  mirror.style.visibility = 'hidden';
+  mirror.style.top = '0';
+  mirror.style.left = '-9999px';
+  mirror.style.whiteSpace = 'pre-wrap';
+  mirror.style.overflowWrap = 'break-word';
+  mirror.style.wordWrap = 'break-word';
+
+  const textNode = document.createTextNode('');
+  const marker = document.createElement('span');
+  marker.textContent = '\u200b';
+
+  mirror.appendChild(textNode);
+  mirror.appendChild(marker);
+  document.body.appendChild(mirror);
+
+  return { mirror, textNode, marker };
+}
+
+function syncMirrorStyles(textarea: HTMLTextAreaElement, mirror: HTMLDivElement) {
+  const computed = window.getComputedStyle(textarea);
+  mirror.style.boxSizing = computed.boxSizing;
+  mirror.style.width = `${textarea.clientWidth}px`;
+  mirror.style.fontFamily = computed.fontFamily;
+  mirror.style.fontSize = computed.fontSize;
+  mirror.style.fontWeight = computed.fontWeight;
+  mirror.style.fontStyle = computed.fontStyle;
+  mirror.style.letterSpacing = computed.letterSpacing;
+  mirror.style.textTransform = computed.textTransform;
+  mirror.style.textAlign = computed.textAlign;
+  mirror.style.lineHeight = computed.lineHeight;
+  mirror.style.whiteSpace = computed.whiteSpace;
+  mirror.style.overflowWrap = computed.overflowWrap;
+  mirror.style.wordBreak = computed.wordBreak;
+  mirror.style.padding = computed.padding;
+  mirror.style.border = computed.border;
+}
+
+function centerCaretInTextarea(
+  textarea: HTMLTextAreaElement,
+  measurer: CaretMeasurer,
+  caretIndex: number,
+) {
+  if (textarea.clientWidth === 0 || textarea.clientHeight === 0) return;
+
+  const clampedIndex = Math.max(0, Math.min(caretIndex, textarea.value.length));
+
+  syncMirrorStyles(textarea, measurer.mirror);
+  measurer.textNode.data = textarea.value.slice(0, clampedIndex);
+
+  const caretTop = measurer.marker.offsetTop;
+  const lineHeight = getLineHeightPx(textarea);
+  const desiredScrollTop = caretTop - textarea.clientHeight / 2 + lineHeight / 2;
+
+  const maxScrollTop = Math.max(0, textarea.scrollHeight - textarea.clientHeight);
+  const clamped = Math.max(0, Math.min(desiredScrollTop, maxScrollTop));
+
+  if (Math.abs(textarea.scrollTop - clamped) > 0.5) {
+    textarea.scrollTop = clamped;
+  }
+}
+
 export const Editor: React.FC<EditorProps> = ({
   content,
   onChange,
   onTyping,
   focusMode,
+  typewriterMode,
   styleCheck,
   isSplitMode,
   pastedRanges = [],
   onPastedRangesChange,
   highlightPastedText,
+  onCursorOffsetChange,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
   const [cursorOffset, setCursorOffset] = useState(0);
+
+  const caretMeasurerRef = useRef<CaretMeasurer | null>(null);
+  const pendingTypewriterCenterRef = useRef(false);
+  const pendingTypewriterCaretIndexRef = useRef(0);
 
   // Track selection for calculating diffs correctly
   const selectionRef = useRef({ start: 0, end: 0 });
@@ -179,6 +275,39 @@ export const Editor: React.FC<EditorProps> = ({
     }
     setToolbarState((prev) => ({ ...prev, visible: false }));
   };
+
+  const syncBackdropScroll = useCallback(() => {
+    if (textareaRef.current && backdropRef.current) {
+      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const measurer = caretMeasurerRef.current;
+      if (measurer) {
+        measurer.mirror.remove();
+        caretMeasurerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Run typewriter centering after the new content has been laid out.
+  useLayoutEffect(() => {
+    if (!typewriterMode) return;
+    if (!pendingTypewriterCenterRef.current) return;
+
+    const textarea = textareaRef.current;
+    pendingTypewriterCenterRef.current = false;
+
+    if (!textarea) return;
+    if (!caretMeasurerRef.current) {
+      caretMeasurerRef.current = createCaretMeasurer();
+    }
+
+    centerCaretInTextarea(textarea, caretMeasurerRef.current, pendingTypewriterCaretIndexRef.current);
+    syncBackdropScroll();
+  }, [content, typewriterMode, syncBackdropScroll]);
 
   const calculateNewRanges = (
     currentRanges: PastedRange[],
@@ -276,6 +405,7 @@ export const Editor: React.FC<EditorProps> = ({
         textareaRef.current.setSelectionRange(state.selection.start, state.selection.end);
         selectionRef.current = state.selection;
         setCursorOffset(state.selection.start);
+        onCursorOffsetChange?.(state.selection.start);
       }
       isUndoingRef.current = false;
       return;
@@ -416,9 +546,27 @@ export const Editor: React.FC<EditorProps> = ({
       onChange(newContent);
       onTyping();
       setCursorOffset(newCursor);
+      onCursorOffsetChange?.(newCursor);
       setToolbarState((prev) => ({ ...prev, visible: false }));
+
+      if (effectiveInsertLength > 0) {
+        const insertedText = newContent.slice(
+          effectiveChangePos,
+          effectiveChangePos + effectiveInsertLength,
+        );
+        if (insertedText.includes('\n')) {
+          pendingTypewriterCenterRef.current = true;
+          pendingTypewriterCaretIndexRef.current = newCursor;
+        }
+      }
     },
-    [onChange, onTyping, pastedRanges, onPastedRangesChange],
+    [
+      onChange,
+      onTyping,
+      pastedRanges,
+      onPastedRangesChange,
+      onCursorOffsetChange,
+    ],
   );
 
   const handlePaste = useCallback(
@@ -520,6 +668,7 @@ export const Editor: React.FC<EditorProps> = ({
   const updateSelection = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
     const { selectionStart, selectionEnd } = e.currentTarget;
     setCursorOffset(selectionStart);
+    onCursorOffsetChange?.(selectionStart);
     selectionRef.current = { start: selectionStart, end: selectionEnd };
 
     // Hide toolbar if selection is collapsed
@@ -657,9 +806,11 @@ export const Editor: React.FC<EditorProps> = ({
                 {seg.text}
               </span>
             ) : styleCheck ? (
-              renderStyleCheckedText(seg.text, `${paragraphStart}-${idx}`)
+              <React.Fragment key={idx}>
+                {renderStyleCheckedText(seg.text, `${paragraphStart}-${idx}`)}
+              </React.Fragment>
             ) : (
-              seg.text
+              <React.Fragment key={idx}>{seg.text}</React.Fragment>
             ),
           )}
         </span>
@@ -743,7 +894,7 @@ export const Editor: React.FC<EditorProps> = ({
 
       <div
         ref={backdropRef}
-        className={`editor-layer pointer-events-none text-gray-800 dark:text-gray-200 ${isSplitMode ? 'split-mode' : ''}`}
+        className={`editor-layer pointer-events-none text-gray-800 dark:text-gray-200 ${isSplitMode ? 'split-mode' : ''} ${typewriterMode ? 'typewriter-mode' : ''}`}
         aria-hidden="true"
       >
         {renderBackdrop()}
@@ -759,7 +910,7 @@ export const Editor: React.FC<EditorProps> = ({
         onKeyDown={handleKeyDown}
         onClick={handleClick}
         onMouseUp={handleMouseUp}
-        className={`editor-layer absolute inset-0 bg-transparent text-transparent caret-blue-600 dark:caret-blue-400 resize-none outline-none z-10 selection:bg-blue-200/50 dark:selection:bg-blue-800/50 placeholder:text-neutral-500 dark:placeholder:text-neutral-400 ${isSplitMode ? 'split-mode' : ''}`}
+        className={`editor-layer absolute inset-0 bg-transparent text-transparent caret-blue-600 dark:caret-blue-400 resize-none outline-none z-10 selection:bg-blue-200/50 dark:selection:bg-blue-800/50 placeholder:text-neutral-500 dark:placeholder:text-neutral-400 ${isSplitMode ? 'split-mode' : ''} ${typewriterMode ? 'typewriter-mode' : ''}`}
         spellCheck={false}
         placeholder="Start writing..."
         aria-label="Editor"

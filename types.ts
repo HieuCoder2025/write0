@@ -16,7 +16,7 @@ export interface Document {
 export interface AppSettings {
   theme: 'light' | 'dark';
   focusMode: boolean;
-  typewriterMode: boolean; // Keeps cursor centered vertically (not fully implemented in this MVP but placeholder)
+  typewriterMode: boolean; // Keeps cursor centered vertically while typing
   styleCheck: boolean;
   showPreview: boolean;
   showSidebar: boolean;

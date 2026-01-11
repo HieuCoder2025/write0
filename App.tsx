@@ -14,6 +14,7 @@ import {
   PanelLeft,
   Share,
   ClipboardPen,
+  AlignCenter,
 } from 'lucide-react';
 import { Tooltip } from './components/Tooltip';
 import { HelpModal } from './components/HelpModal';
@@ -73,17 +74,35 @@ const App: React.FC = () => {
   // Confirm delete state
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
 
+  // Cursor position (for focus mode syncing with Preview)
+  const [cursorOffset, setCursorOffset] = useState(0);
+
   // --- Derived State ---
   const activeDoc = useMemo(
     () => documents.find((d) => d.id === activeDocId),
     [documents, activeDocId],
   );
 
+  const focusLine = useMemo(() => {
+    if (!settings.focusMode) return null;
+    const text = activeDoc?.content ?? '';
+    const clamped = Math.max(0, Math.min(cursorOffset, text.length));
+    let line = 1;
+    for (let i = 0; i < clamped; i++) {
+      if (text[i] === '\n') line++;
+    }
+    return line;
+  }, [activeDoc?.content, cursorOffset, settings.focusMode]);
+
   useEffect(() => {
     if (documents.length === 0) return;
     if (documents.some((d) => d.id === activeDocId)) return;
     setActiveDocId(documents[0].id);
   }, [documents, activeDocId]);
+
+  useEffect(() => {
+    setCursorOffset(0);
+  }, [activeDocId]);
 
   const wordCount = useMemo(() => {
     if (!activeDoc) return 0;
@@ -363,6 +382,20 @@ const App: React.FC = () => {
               </button>
             </Tooltip>
 
+            <Tooltip content="Typewriter Mode" position="bottom">
+              <button
+                onClick={() => toggleSetting('typewriterMode')}
+                className={`p-2 rounded-md transition-colors hidden sm:block ${settings.typewriterMode ? 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-400'}`}
+                aria-label={
+                  settings.typewriterMode
+                    ? 'Disable typewriter mode'
+                    : 'Enable typewriter mode'
+                }
+              >
+                <AlignCenter size={18} />
+              </button>
+            </Tooltip>
+
             <Tooltip content="Style Check" position="bottom">
               <button
                 onClick={() => toggleSetting('styleCheck')}
@@ -470,16 +503,18 @@ const App: React.FC = () => {
                   onChange={handleUpdateContent}
                   onTyping={handleTyping}
                   focusMode={settings.focusMode}
+                  typewriterMode={settings.typewriterMode}
                   styleCheck={settings.styleCheck}
                   isSplitMode={settings.showPreview}
                   pastedRanges={activeDoc.pastedRanges}
                   onPastedRangesChange={handlePastedRangesChange}
                   highlightPastedText={settings.highlightPastedText}
+                  onCursorOffsetChange={setCursorOffset}
                 />
               </div>
               {settings.showPreview && (
                 <div className="w-1/2 h-full hidden md:block">
-                  <Preview content={activeDoc.content} />
+                  <Preview content={activeDoc.content} focusMode={settings.focusMode} focusLine={focusLine} />
                 </div>
               )}
             </>
@@ -498,7 +533,11 @@ const App: React.FC = () => {
             <span className="font-bold">Preview</span>
             <button onClick={() => toggleSetting('showPreview')}>Close</button>
           </div>
-          <Preview content={activeDoc?.content || ''} />
+          <Preview
+            content={activeDoc?.content || ''}
+            focusMode={settings.focusMode}
+            focusLine={focusLine}
+          />
         </div>
       )}
     </div>
